@@ -2,8 +2,8 @@ const { Telegraf, Markup } = require('telegraf');
 const axios = require('axios');
 const http = require('http');
 
-// NEW BOT TOKEN
-const TELEGRAM_BOT_TOKEN = '8663930234:AAFCDXDuLLofDASj7ZCygDmPNZ-EUFgM0FE';
+// NEW SECURED BOT TOKEN
+const TELEGRAM_BOT_TOKEN = '8663930234:AAFQXLCvYhKWxwHjZsrP9-Vtzxcs5-D1GAY';
 
 // API CONFIG
 const API_BASE_URL = 'https://jannat-otp-1.vercel.app/get-number.php';
