@@ -358,4 +358,32 @@ function startOtpPolling(ctx, orderId, number, serviceCode, messageId) {
         console.warn('Group broadcast failed:', e.message);
       }
 
-    } else if (pollCount >=
+    } else if (pollCount >= maxPolls) {
+      clearInterval(activePollers[orderId]);
+      delete activePollers[orderId];
+
+      try {
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          messageId,
+          null,
+          `⏰ *Order ${orderId} Expired (30m).*`,
+          { parse_mode: 'Markdown' }
+        );
+      } catch (e) {}
+    }
+  }, 5000);
+}
+
+bot.action('close_menu', (ctx) => { ctx.deleteMessage().catch(()=>{}); });
+
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Jannat OTP Bot Online\n');
+}).listen(PORT);
+
+bot.launch().then(() => console.log('Bot is live!'));
+
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
