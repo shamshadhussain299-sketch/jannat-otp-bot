@@ -6,8 +6,8 @@ const http = require('http');
 const TELEGRAM_BOT_TOKEN = process.env.BOT_TOKEN || '8663930234:AAFQXLCvYhKWxwHjZsrP9-Vtzxcs5-D1GAY';
 const API_KEY = process.env.JANNAT_API_KEY || 'ZNX_03CZSLDHHSW41IZWV61X8850';
 
-// NEW ALL-OK VERCEL ENDPOINT
-const API_BASE_URL = 'https://otp-web-12.vercel.app/get-number.php';
+// CORRECT VERCEL API PATH
+const API_BASE_URL = 'https://otp-web-12.vercel.app/api/get-number.php';
 const OTP_GROUP_CHAT_ID = '@JannatOTP_Official';
 const SUPPORT_USERNAME = '@Olx006';
 const MAIN_CHANNEL_LINK = 'https://t.me/JannatOTP_Official';
@@ -71,7 +71,7 @@ bot.hears('☎️ Support', (ctx) => {
   ctx.reply(`🚨 *Support:* ${SUPPORT_USERNAME}`);
 });
 
-// GET NUMBER - CONNECTED TO OTP-WEB-12
+// GET NUMBER
 bot.action(/^srv_/, async (ctx) => {
   const serviceCode = ctx.match.input.split('_')[1];
   ctx.answerCbQuery('Fetching number...');
@@ -117,7 +117,7 @@ bot.action(/^srv_/, async (ctx) => {
       ctx.reply('❌ Unable to fetch number. Response invalid.');
     }
   } catch (err) {
-    ctx.reply('⚠️ API Connection failed. Check server status.');
+    ctx.reply(`⚠️ Connection Failed: ${err.message}`);
   }
 });
 
