@@ -2,16 +2,19 @@ const { Telegraf, Markup } = require('telegraf');
 const axios = require('axios');
 const http = require('http');
 
-// NEW SECURED BOT TOKEN
-const TELEGRAM_BOT_TOKEN = '8663930234:AAFQXLCvYhKWxwHjZsrP9-Vtzxcs5-D1GAY';
+// SECURED ENVIRONMENT VARIABLES (KEYS ARE HIDDEN)
+const TELEGRAM_BOT_TOKEN = process.env.BOT_TOKEN;
+const API_KEY = process.env.JANNAT_API_KEY;
 
-// API CONFIG
 const API_BASE_URL = 'https://jannat-otp-1.vercel.app/get-number.php';
-const API_KEY = 'ZNX_03CZSLDHHSW41IZWV61X8850';
-
 const OTP_GROUP_CHAT_ID = '@JannatOTP_Official';
 const SUPPORT_USERNAME = '@Olx006';
 const MAIN_CHANNEL_LINK = 'https://t.me/JannatOTP_Official';
+
+if (!TELEGRAM_BOT_TOKEN || !API_KEY) {
+  console.error("CRITICAL ERROR: BOT_TOKEN or JANNAT_API_KEY is missing in Environment Variables!");
+  process.exit(1);
+}
 
 const bot = new Telegraf(TELEGRAM_BOT_TOKEN);
 const users = {};
