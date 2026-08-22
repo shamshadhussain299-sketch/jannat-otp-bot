@@ -75,26 +75,16 @@ bot.hears('☎️ Support', (ctx) => {
   ctx.reply(`🚨 *Support:* ${SUPPORT_USERNAME}`);
 });
 
-// GET NUMBER WITH CANCEL & COPY BUTTONS
+// GET NUMBER WITH DIAGNOSTIC DEBUG LOGS
 bot.action(/^srv_/, async (ctx) => {
   const serviceCode = ctx.match.input.split('_')[1];
   ctx.answerCbQuery('Fetching number...');
   await ctx.reply(`⏳ *Provisioning number for ${serviceCode.toUpperCase()}...*`, { parse_mode: 'Markdown' });
 
-  try {
-    const res = await axios.get(API_BASE_URL, {
-      params: {
-        api_key: API_KEY,
-        action: 'get_number',
-        service: serviceCode,
-        country: 'any'
-      },
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-      },
-      timeout: 10000
-    });
+  const targetUrl = `${API_BASE_URL}?api_key=${API_KEY}&action=get_number&service=${serviceCode}&country=any`;
 
+  try {
+    const res = await axios.get(targetUrl, { timeout: 10000 });
     const data = res.data;
 
     if (data && (data.number || data.phone || data.success)) {
@@ -118,10 +108,12 @@ bot.action(/^srv_/, async (ctx) => {
 
       pollForOtp(ctx, orderId, number, serviceCode, countryName);
     } else {
-      ctx.reply('❌ No numbers available for this service right now. Please try again.');
+      const rawText = typeof data === 'object' ? JSON.stringify(data) : String(data);
+      ctx.reply(`❌ API Response Issue:\n\`${rawText.substring(0, 150)}\``, { parse_mode: 'Markdown' });
     }
   } catch (err) {
-    ctx.reply('⚠️ API Connection failed. Please check Jannat API balance or try again.');
+    const errorMsg = err.response ? JSON.stringify(err.response.data) : err.message;
+    ctx.reply(`⚠️ Connection Failed Error:\n\`${errorMsg}\``, { parse_mode: 'Markdown' });
   }
 });
 
@@ -130,10 +122,7 @@ bot.action(/^cancel_/, async (ctx) => {
   const orderId = ctx.match.input.split('_')[1];
   ctx.answerCbQuery('Cancelling order...');
   try {
-    await axios.get(API_BASE_URL, {
-      params: { api_key: API_KEY, action: 'cancel_number', order_id: orderId },
-      timeout: 5000
-    });
+    await axios.get(`${API_BASE_URL}?api_key=${API_KEY}&action=cancel_number&order_id=${orderId}`);
     ctx.editMessageText(`❌ *Order #${orderId} Cancelled Successfully.*`, { parse_mode: 'Markdown' });
   } catch (err) {
     ctx.editMessageText(`❌ *Order #${orderId} Cancelled.*`, { parse_mode: 'Markdown' });
@@ -153,10 +142,7 @@ function pollForOtp(ctx, orderId, number, service, country) {
   const interval = setInterval(async () => {
     attempts++;
     try {
-      const res = await axios.get(API_BASE_URL, {
-        params: { api_key: API_KEY, action: 'get_sms', order_id: orderId },
-        timeout: 5000
-      });
+      const res = await axios.get(`${API_BASE_URL}?api_key=${API_KEY}&action=get_sms&order_id=${orderId}`);
       const data = res.data;
 
       if (data && (data.sms_code || data.code || data.status === 'SMS_RECEIVED')) {
