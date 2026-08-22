@@ -2,7 +2,7 @@ const { Telegraf, Markup } = require('telegraf');
 const axios = require('axios');
 const http = require('http');
 
-// DIRECT KEYS WITH FALLBACK (NO MORE RENDER VARIABLE ISSUES)
+// KEYS & CONFIG
 const TELEGRAM_BOT_TOKEN = process.env.BOT_TOKEN || '8663930234:AAFQXLCvYhKWxwHjZsrP9-Vtzxcs5-D1GAY';
 const API_KEY = process.env.JANNAT_API_KEY || 'ZNX_03CZSLDHHSW41IZWV61X8850';
 
@@ -82,12 +82,24 @@ bot.action(/^srv_/, async (ctx) => {
   await ctx.reply(`⏳ *Provisioning number for ${serviceCode.toUpperCase()}...*`, { parse_mode: 'Markdown' });
 
   try {
-    const res = await axios.get(`${API_BASE_URL}?api_key=${API_KEY}&action=get_number&service=${serviceCode}&country=any`);
+    const res = await axios.get(API_BASE_URL, {
+      params: {
+        api_key: API_KEY,
+        action: 'get_number',
+        service: serviceCode,
+        country: 'any'
+      },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      },
+      timeout: 10000
+    });
+
     const data = res.data;
 
-    if (data && (data.number || data.success)) {
-      const number = data.number;
-      const orderId = data.order_id || Date.now();
+    if (data && (data.number || data.phone || data.success)) {
+      const number = data.number || data.phone;
+      const orderId = data.order_id || data.id || Date.now();
       const countryName = data.country || 'Sierra Leone';
 
       const orderKeyboard = Markup.inlineKeyboard([
@@ -106,10 +118,10 @@ bot.action(/^srv_/, async (ctx) => {
 
       pollForOtp(ctx, orderId, number, serviceCode, countryName);
     } else {
-      ctx.reply('❌ No numbers available. Please try again.');
+      ctx.reply('❌ No numbers available for this service right now. Please try again.');
     }
   } catch (err) {
-    ctx.reply('⚠️ Error connecting to server.');
+    ctx.reply('⚠️ API Connection failed. Please check Jannat API balance or try again.');
   }
 });
 
@@ -118,7 +130,10 @@ bot.action(/^cancel_/, async (ctx) => {
   const orderId = ctx.match.input.split('_')[1];
   ctx.answerCbQuery('Cancelling order...');
   try {
-    await axios.get(`${API_BASE_URL}?api_key=${API_KEY}&action=cancel_number&order_id=${orderId}`);
+    await axios.get(API_BASE_URL, {
+      params: { api_key: API_KEY, action: 'cancel_number', order_id: orderId },
+      timeout: 5000
+    });
     ctx.editMessageText(`❌ *Order #${orderId} Cancelled Successfully.*`, { parse_mode: 'Markdown' });
   } catch (err) {
     ctx.editMessageText(`❌ *Order #${orderId} Cancelled.*`, { parse_mode: 'Markdown' });
@@ -138,7 +153,10 @@ function pollForOtp(ctx, orderId, number, service, country) {
   const interval = setInterval(async () => {
     attempts++;
     try {
-      const res = await axios.get(`${API_BASE_URL}?api_key=${API_KEY}&action=get_sms&order_id=${orderId}`);
+      const res = await axios.get(API_BASE_URL, {
+        params: { api_key: API_KEY, action: 'get_sms', order_id: orderId },
+        timeout: 5000
+      });
       const data = res.data;
 
       if (data && (data.sms_code || data.code || data.status === 'SMS_RECEIVED')) {
@@ -155,7 +173,7 @@ function pollForOtp(ctx, orderId, number, service, country) {
 
         const now = new Date();
         const timeStr = now.toISOString().replace('T', ' ').substring(0, 19);
-        const rangeText = `${number.substring(0, 6)}XXX`;
+        const rangeText = `${String(number).substring(0, 6)}XXX`;
 
         const groupMsg = 
           `*ACTIVE RANGE*\n` +
