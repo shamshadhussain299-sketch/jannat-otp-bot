@@ -355,4 +355,7 @@ function startOtpPolling(ctx, orderId, number, serviceCode, messageId) {
           }
         );
       } catch (e) {
-        console.warn('Group broadcast failed:', e
+        console.warn('Group broadcast failed:', e.message);
+      }
+
+    } else if (pollCount >=
