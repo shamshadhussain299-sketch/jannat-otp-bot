@@ -1,40 +1,18 @@
 const { Telegraf, Markup } = require('telegraf');
-const https = require('https');
+const axios = require('axios');
 const http = require('http');
 
 // KEYS & CONFIG
 const TELEGRAM_BOT_TOKEN = process.env.BOT_TOKEN || '8663930234:AAFQXLCvYhKWxwHjZsrP9-Vtzxcs5-D1GAY';
 const API_KEY = process.env.JANNAT_API_KEY || 'ZNX_03CZSLDHHSW41IZWV61X8850';
 
+const API_BASE_URL = 'https://jannat-otp-1.vercel.app/get-number.php';
 const OTP_GROUP_CHAT_ID = '@JannatOTP_Official';
 const SUPPORT_USERNAME = '@Olx006';
 const MAIN_CHANNEL_LINK = 'https://t.me/JannatOTP_Official';
 
 const bot = new Telegraf(TELEGRAM_BOT_TOKEN);
 const users = {};
-
-// Helper function to fetch data directly via native HTTPS
-function fetchApi(url) {
-  return new Promise((resolve, reject) => {
-    const options = {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/html, */*'
-      }
-    };
-    https.get(url, options, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(data));
-        } catch (e) {
-          resolve(data); // If plain text response
-        }
-      });
-    }).on('error', (err) => reject(err));
-  });
-}
 
 function getUser(ctx) {
   const userId = ctx.from.id;
@@ -92,43 +70,60 @@ bot.hears('☎️ Support', (ctx) => {
   ctx.reply(`🚨 *Support:* ${SUPPORT_USERNAME}`);
 });
 
-// GET NUMBER
+// GET NUMBER WITH MULTI-METHOD FETCH (POST + GET)
 bot.action(/^srv_/, async (ctx) => {
   const serviceCode = ctx.match.input.split('_')[1];
   ctx.answerCbQuery('Fetching number...');
   await ctx.reply(`⏳ *Provisioning number for ${serviceCode.toUpperCase()}...*`, { parse_mode: 'Markdown' });
 
-  const requestUrl = `https://jannat-otp-1.vercel.app/get-number.php?api_key=${API_KEY}&action=get_number&service=${serviceCode}&country=any`;
+  let data = null;
 
+  // Attempt 1: POST Request
   try {
-    const data = await fetchApi(requestUrl);
-
-    if (data && (data.number || data.phone || data.success)) {
-      const number = data.number || data.phone;
-      const orderId = data.order_id || data.id || Date.now();
-      const countryName = data.country || 'Sierra Leone';
-
-      const orderKeyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('🔄 Check OTP', `check_${orderId}`), Markup.button.callback('❌ Cancel Order', `cancel_${orderId}`)],
-        [Markup.button.url('🔑 OTP Group', MAIN_CHANNEL_LINK)]
-      ]);
-
-      ctx.replyWithMarkdown(
-        `🌐 *YOUR NUMBER DETAILS*\n\n` +
-        `📌 *Service:* ${serviceCode.toUpperCase()}\n` +
-        `📱 *Number:* \`+${number}\` (Tap to copy)\n` +
-        `🆔 *Order ID:* \`${orderId}\`\n\n` +
-        `🔑 *Status:* Waiting for OTP (Auto Syncing 5s)...`,
-        orderKeyboard
-      );
-
-      pollForOtp(ctx, orderId, number, serviceCode, countryName);
-    } else {
-      const rawText = typeof data === 'object' ? JSON.stringify(data) : String(data);
-      ctx.reply(`❌ Server Response: \`${rawText.substring(0, 150)}\``, { parse_mode: 'Markdown' });
-    }
+    const res = await axios.post(API_BASE_URL, {
+      api_key: API_KEY,
+      action: 'get_number',
+      service: serviceCode,
+      country: 'any'
+    }, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 8000
+    });
+    data = res.data;
   } catch (err) {
-    ctx.reply(`⚠️ Connection Failed: \`${err.message}\``, { parse_mode: 'Markdown' });
+    // Attempt 2: GET Request fallback if POST fails
+    try {
+      const res = await axios.get(`${API_BASE_URL}?api_key=${API_KEY}&action=get_number&service=${serviceCode}&country=any`, {
+        timeout: 8000
+      });
+      data = res.data;
+    } catch (innerErr) {
+      data = null;
+    }
+  }
+
+  if (data && (data.number || data.phone || data.success)) {
+    const number = data.number || data.phone;
+    const orderId = data.order_id || data.id || Date.now();
+    const countryName = data.country || 'Sierra Leone';
+
+    const orderKeyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('🔄 Check OTP', `check_${orderId}`), Markup.button.callback('❌ Cancel Order', `cancel_${orderId}`)],
+      [Markup.button.url('🔑 OTP Group', MAIN_CHANNEL_LINK)]
+    ]);
+
+    ctx.replyWithMarkdown(
+      `🌐 *YOUR NUMBER DETAILS*\n\n` +
+      `📌 *Service:* ${serviceCode.toUpperCase()}\n` +
+      `📱 *Number:* \`+${number}\` (Tap to copy)\n` +
+      `🆔 *Order ID:* \`${orderId}\`\n\n` +
+      `🔑 *Status:* Waiting for OTP (Auto Syncing 5s)...`,
+      orderKeyboard
+    );
+
+    pollForOtp(ctx, orderId, number, serviceCode, countryName);
+  } else {
+    ctx.reply('❌ API Error: Vercel route not returning valid data. Check API endpoint path.');
   }
 });
 
@@ -137,7 +132,7 @@ bot.action(/^cancel_/, async (ctx) => {
   const orderId = ctx.match.input.split('_')[1];
   ctx.answerCbQuery('Cancelling order...');
   try {
-    await fetchApi(`https://jannat-otp-1.vercel.app/get-number.php?api_key=${API_KEY}&action=cancel_number&order_id=${orderId}`);
+    await axios.get(`${API_BASE_URL}?api_key=${API_KEY}&action=cancel_number&order_id=${orderId}`);
     ctx.editMessageText(`❌ *Order #${orderId} Cancelled Successfully.*`, { parse_mode: 'Markdown' });
   } catch (err) {
     ctx.editMessageText(`❌ *Order #${orderId} Cancelled.*`, { parse_mode: 'Markdown' });
@@ -157,7 +152,8 @@ function pollForOtp(ctx, orderId, number, service, country) {
   const interval = setInterval(async () => {
     attempts++;
     try {
-      const data = await fetchApi(`https://jannat-otp-1.vercel.app/get-number.php?api_key=${API_KEY}&action=get_sms&order_id=${orderId}`);
+      const res = await axios.get(`${API_BASE_URL}?api_key=${API_KEY}&action=get_sms&order_id=${orderId}`);
+      const data = res.data;
 
       if (data && (data.sms_code || data.code || data.status === 'SMS_RECEIVED')) {
         clearInterval(interval);
