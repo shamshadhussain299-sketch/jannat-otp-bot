@@ -51,13 +51,13 @@ function getServicesKeyboard() {
   ]);
 }
 
-// Galaxy Style Active Number Keyboard
+// Galaxy Style Active Number Keyboard (Includes BOTH Cancel Order AND OTP Group Channel Button)
 function getActiveNumberKeyboard(orderId, serviceCode, allocatedNum) {
   return Markup.inlineKeyboard([
     [Markup.button.callback(`📋 ${allocatedNum}`, `copy_num_${orderId}`)],
-    [Markup.button.callback('🔄 Check OTP', `check_otp_${orderId}`), Markup.button.callback('🆙 Change Number', `service_${serviceCode}`)],
-    [Markup.button.callback('🎴 Change Country', 'change_country')],
-    [Markup.button.url('🔑 OTP Group', MAIN_CHANNEL_LINK)],
+    [Markup.button.callback('🔄 Check OTP', `check_otp_${orderId}`), Markup.button.callback('❌ Cancel Order', `cancel_${orderId}`)],
+    [Markup.button.url('🔑 OTP Group', MAIN_CHANNEL_LINK), Markup.button.url('📢 Channel', MAIN_CHANNEL_LINK)],
+    [Markup.button.callback('🆙 Change Number', `service_${serviceCode}`), Markup.button.callback('🎴 Change Country', 'change_country')],
     [Markup.button.callback('⬅️ Back', 'close_menu')]
   ]);
 }
@@ -232,6 +232,7 @@ bot.action(/^service_/, async (ctx) => {
       `📱 *Number:* \`${allocatedNum}\`\n` +
       `🆔 *Order ID:* \`${orderId}\`\n\n` +
       `🔑 *Status:* Waiting for OTP (Auto Syncing 5s)...\n` +
+      `📢 *Live Channel:* ${MAIN_CHANNEL_LINK}\n` +
       `_(Numbers remain active for 30m)_`, 
       activeKeyboard
     );
@@ -241,6 +242,27 @@ bot.action(/^service_/, async (ctx) => {
 
   } else {
     ctx.reply(`❌ ${resData.message || 'Out of stock. Please try again.'}`);
+  }
+});
+
+// CANCEL ORDER ACTION HANDLER
+bot.action(/^cancel_/, async (ctx) => {
+  const orderId = ctx.match.input.split('_')[1];
+  ctx.answerCbQuery('Cancelling order...');
+
+  if (activePollers[orderId]) {
+    clearInterval(activePollers[orderId]);
+    delete activePollers[orderId];
+  }
+
+  try {
+    await axios.get(`${API_BASE_URL}?api_key=${API_KEY}&action=cancel_number&order_id=${orderId}`);
+  } catch (e) {}
+
+  try {
+    await ctx.editMessageText(`❌ *Order ${orderId} Cancelled.*\nNumber has been released.`, { parse_mode: 'Markdown' });
+  } catch (e) {
+    ctx.reply(`❌ Order ${orderId} Cancelled.`);
   }
 });
 
@@ -256,10 +278,11 @@ bot.action(/^check_otp_/, async (ctx) => {
       `🎉 *OTP RECEIVED!*\n\n` +
       `🆔 *Order ID:* \`${orderId}\`\n` +
       `🔑 *OTP Code:* \`${res.sms_code}\`\n` +
-      `📄 *Message:* _${res.sms_text || ''}_`
+      `📄 *Message:* _${res.sms_text || ''}_\n\n` +
+      `📢 *Official Channel:* ${MAIN_CHANNEL_LINK}`
     );
   } else {
-    ctx.answerCbQuery('⏳ Still waiting for OTP... (Auto-checking active)', { show_alert: true });
+    ctx.answerCbQuery('⏳ Still waiting for OTP... (Checking Channel: https://t.me/JannatOTP_Official)', { show_alert: true });
   }
 });
 
@@ -299,4 +322,37 @@ function startOtpPolling(ctx, orderId, number, serviceCode, messageId) {
           null,
           `🎉 *OTP RECEIVED SUCCESSFULLY!*\n\n` +
           `📌 *Service:* ${serviceCode.toUpperCase()}\n` +
-          `📱 *Number:* \`${number}\
+          `📱 *Number:* \`${number}\`\n` +
+          `🔑 *OTP CODE:* \`${otpCode}\`\n\n` +
+          `📄 *Full Message:* _${fullSms}_\n` +
+          `📢 *Channel:* ${MAIN_CHANNEL_LINK}`,
+          { parse_mode: 'Markdown' }
+        );
+      } catch (e) {
+        ctx.replyWithMarkdown(`🎉 *OTP RECEIVED FOR ${serviceCode.toUpperCase()}!*\n\n🔑 *Code:* \`${otpCode}\``);
+      }
+
+      // Forward to Official Group Channel (@JannatOTP_Official)
+      try {
+        const botUsername = ctx.botInfo ? ctx.botInfo.username : 'JannatOTP_Bot';
+        const groupKeyboard = Markup.inlineKeyboard([
+          [
+            Markup.button.url('🤖 NUMBER BOT', `https://t.me/${botUsername}`),
+            Markup.button.url('📢 MAIN CHANNEL', MAIN_CHANNEL_LINK)
+          ]
+        ]);
+
+        await ctx.telegram.sendMessage(
+          OTP_GROUP_CHAT_ID,
+          `🎉 *NEW OTP RECEIVED!*\n\n` +
+          `📌 *Service:* ${serviceCode.toUpperCase()}\n` +
+          `📱 *Number:* \`${number.substring(0, 7)}****\`\n` +
+          `🔑 *OTP Code:* \`${otpCode}\`\n\n` +
+          `📄 *Message:* _${fullSms}_`,
+          {
+            parse_mode: 'Markdown',
+            ...groupKeyboard
+          }
+        );
+      } catch (e) {
+        console.warn('Group broadcast failed:', e
