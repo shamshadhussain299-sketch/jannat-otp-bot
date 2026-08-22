@@ -1,15 +1,21 @@
-﻿const { Telegraf, Markup } = require('telegraf');
+const { Telegraf, Markup } = require('telegraf');
 const axios = require('axios');
 const http = require('http');
 
+// CONFIGURATIONS
 const TELEGRAM_BOT_TOKEN = '8663930234:AAFCDXDuLLofDASj7ZCygDmPNZ-EUFgM0FE';
-const API_BASE_URL = 'https://jannat-otp-1.vercel.app/api/get-number.php';
+
+// FIXED JANNAT OTP API ENDPOINT
+const API_BASE_URL = 'https://jannat-otp-1.vercel.app/get-number.php';
 const API_KEY = 'ZNX_03CZSLDHHSW41IZWV61X8850';
+
 const OTP_GROUP_CHAT_ID = '@JannatOTP_Official';
 const SUPPORT_USERNAME = '@Olx006';
 const MAIN_CHANNEL_LINK = 'https://t.me/JannatOTP_Official';
 
 const bot = new Telegraf(TELEGRAM_BOT_TOKEN);
+
+// User Database
 const users = {};
 
 function getUser(ctx) {
@@ -30,21 +36,7 @@ function getUser(ctx) {
   return users[userId];
 }
 
-async function setCommands() {
-  try {
-    await bot.telegram.setMyCommands([
-      { command: 'start', description: '🚀 Launch Bot' },
-      { command: 'profile', description: '👤 My Profile' },
-      { command: 'refer', description: '🔗 Referral Link' },
-      { command: 'withdraw', description: '💰 Withdraw Earnings' },
-      { command: 'support', description: '☎️ Support Information' }
-    ]);
-    console.log('✅ Bot Menu Commands Successfully Updated!');
-  } catch (err) {
-    console.error('❌ Failed to set commands:', err.message);
-  }
-}
-
+// MAIN MENU KEYBOARD
 const mainReplyKeyboard = Markup.keyboard([
   ['📱 Get Number', '🚥 Live Traffic'],
   ['🤖 Api Number'],
@@ -52,6 +44,7 @@ const mainReplyKeyboard = Markup.keyboard([
   ['💰 Withdraw', '☎️ Support']
 ]).resize();
 
+// START COMMAND & REFERRAL SYSTEM
 bot.start((ctx) => {
   const user = getUser(ctx);
   const startArgs = ctx.message.text.split(' ')[1];
@@ -64,6 +57,7 @@ bot.start((ctx) => {
       users[referrerId].balance += 0.001;
       users[referrerId].totalEarned += 0.001;
       users[referrerId].refEarned += 0.001;
+      
       bot.telegram.sendMessage(referrerId, `🎉 *New Referral!* You earned $0.001 from ${user.name}.`, { parse_mode: 'Markdown' }).catch(()=>{});
     }
   }
@@ -71,6 +65,7 @@ bot.start((ctx) => {
   ctx.reply(`Welcome ${user.name}!\n\nUse the menu below to get started:`, mainReplyKeyboard);
 });
 
+// HEAR COMMANDS
 bot.hears('📱 Get Number', (ctx) => {
   const servicesMenu = Markup.inlineKeyboard([
     [Markup.button.callback('📘 Facebook', 'service_fb'), Markup.button.callback('🟢 WhatsApp', 'service_wa')],
@@ -105,6 +100,7 @@ bot.hears('👤 Profile', (ctx) => {
     `└ 📩 *OTP:* $${u.otpEarned.toFixed(3)}\n\n` +
     `🔗 Use *Refer* button to see your referral link.\n` +
     `💳 Use *Withdraw* button to request a withdrawal.`;
+
   ctx.replyWithMarkdown(profileMsg);
 });
 
@@ -112,6 +108,7 @@ bot.hears('🔗 Refer', (ctx) => {
   const u = getUser(ctx);
   const botUsername = ctx.botInfo.username;
   const refLink = `https://t.me/${botUsername}?start=ref_${u.id}`;
+
   const refMsg = 
     `🔗 *Referral Program*\n\n` +
     `🔗 *Your Referral Link:*\n\`${refLink}\`\n\n` +
@@ -120,6 +117,7 @@ bot.hears('🔗 Refer', (ctx) => {
     `💰 *Per Referral:* $0.001\n` +
     `📈 *Withdrawal Commission:* 5%\n\n` +
     `✨ *Share your link! Earn $0.001 per user + commission when they withdraw!*`;
+
   ctx.replyWithMarkdown(refMsg);
 });
 
@@ -134,11 +132,13 @@ bot.hears('💰 Withdraw', (ctx) => {
     `- Bkash (৳): $15\n` +
     `- Binance (uid) only ..: $0.119\n\n` +
     `Select your withdrawal method:`;
+
   const wButtons = Markup.inlineKeyboard([
     [Markup.button.callback('Bkash (৳)', 'w_bkash')],
     [Markup.button.callback('Binance (uid) only ..', 'w_binance')],
     [Markup.button.callback('❌ Cancel', 'close_menu')]
   ]);
+
   ctx.replyWithMarkdown(withdrawMsg, wButtons);
 });
 
@@ -150,25 +150,33 @@ bot.hears('☎️ Support', (ctx) => {
   ctx.reply(`🚨 *Support Information*\n\nFor any help or inquiries:\n\n👤 *Admin Contact:* ${SUPPORT_USERNAME}\n📢 *OTP Group:* View all OTPs in our Group`, { parse_mode: 'Markdown', ...sButtons });
 });
 
+// GET NUMBER API
 bot.action(/^service_/, async (ctx) => {
   const serviceCode = ctx.match.input.split('_')[1];
   ctx.answerCbQuery();
   await ctx.reply(`⏳ *Provisioning number for ${serviceCode.toUpperCase()}...*`, { parse_mode: 'Markdown' });
 
   try {
-    const response = await axios.post(API_BASE_URL, {
-      api_key: API_KEY,
-      action: 'get_number',
-      service: serviceCode,
-      country: 'any'
-    }, { headers: { 'Content-Type': 'application/json' } });
+    const params = new URLSearchParams();
+    params.append('api_key', API_KEY);
+    params.append('action', 'get_number');
+    params.append('service', serviceCode);
+    params.append('country', 'any');
+
+    const response = await axios.post(API_BASE_URL, params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
 
     const resData = response.data;
-    if (resData && resData.success && resData.number) {
-      const orderId = resData.order_id;
+
+    if (resData && (resData.success || resData.number)) {
+      const orderId = resData.order_id || resData.id || Date.now();
       const allocatedNum = resData.number;
       const countryCode = resData.country || 'Global';
-      const cancelBtn = Markup.inlineKeyboard([[Markup.button.callback('❌ Cancel Order', `cancel_${orderId}`)]]);
+
+      const cancelBtn = Markup.inlineKeyboard([
+        [Markup.button.callback('❌ Cancel Order', `cancel_${orderId}`)]
+      ]);
 
       ctx.replyWithMarkdown(
         `🌐 *YOUR NUMBER DETAILS*\n\n` +
@@ -178,24 +186,29 @@ bot.action(/^service_/, async (ctx) => {
         `🔑 *Status:* Waiting for OTP...`, 
         cancelBtn
       );
+
       pollForOtp(ctx, orderId, allocatedNum, serviceCode, countryCode);
     } else {
-      ctx.reply(`❌ Could not fetch number. ${resData.message || 'Out of stock.'}`);
+      ctx.reply(`❌ Could not fetch number. ${resData.message || 'Out of stock or invalid key.'}`);
     }
   } catch (error) {
-    ctx.reply('⚠️ Error connecting to Jannat OTP API.');
+    ctx.reply('⚠️ Error connecting to Jannat OTP API. Please check server stock.');
   }
 });
 
+// CANCEL ORDER
 bot.action(/^cancel_/, async (ctx) => {
   const orderId = ctx.match.input.split('_')[1];
   ctx.answerCbQuery();
 
   try {
-    const response = await axios.post(API_BASE_URL, {
-      api_key: API_KEY,
-      action: 'cancel_number',
-      order_id: orderId
+    const params = new URLSearchParams();
+    params.append('api_key', API_KEY);
+    params.append('action', 'cancel_number');
+    params.append('order_id', orderId);
+
+    const response = await axios.post(API_BASE_URL, params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
 
     if (response.data && response.data.success) {
@@ -208,6 +221,7 @@ bot.action(/^cancel_/, async (ctx) => {
   }
 });
 
+// OTP POLLING & GROUP FORWARDING
 function pollForOtp(ctx, orderId, number, service, country) {
   let attempts = 0;
   const maxAttempts = 120;
@@ -215,20 +229,26 @@ function pollForOtp(ctx, orderId, number, service, country) {
   const interval = setInterval(async () => {
     attempts++;
     try {
-      const response = await axios.post(API_BASE_URL, {
-        api_key: API_KEY,
-        action: 'get_sms',
-        order_id: orderId
-      }, { headers: { 'Content-Type': 'application/json' } });
+      const params = new URLSearchParams();
+      params.append('api_key', API_KEY);
+      params.append('action', 'get_sms');
+      params.append('order_id', orderId);
+
+      const response = await axios.post(API_BASE_URL, params, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      });
 
       const resData = response.data;
-      if (resData && resData.success && resData.status === 'SMS_RECEIVED') {
-        clearInterval(interval);
-        const otpCode = resData.sms_code;
-        const fullMsg = resData.sms_text || `Your verification code is ${otpCode}`;
 
+      if (resData && (resData.success || resData.status === 'SMS_RECEIVED')) {
+        clearInterval(interval);
+        const otpCode = resData.sms_code || resData.code;
+        const fullMsg = resData.sms_text || resData.message || `Your verification code is ${otpCode}`;
+
+        // Send to User
         ctx.replyWithMarkdown(`🎉 *OTP RECEIVED!*\n\n📱 *Number:* \`${number}\`\n🔑 *OTP Code:* \`${otpCode}\`\n\n📩 *Message:* \`${fullMsg}\``);
 
+        // Send to Group
         const countryTag = `#${country}`;
         const nowTime = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
@@ -251,7 +271,10 @@ function pollForOtp(ctx, orderId, number, service, country) {
         ]);
 
         if (OTP_GROUP_CHAT_ID) {
-          bot.telegram.sendMessage(OTP_GROUP_CHAT_ID, groupMsg, { parse_mode: 'Markdown', ...groupButtons }).catch(()=>{});
+          bot.telegram.sendMessage(OTP_GROUP_CHAT_ID, groupMsg, {
+            parse_mode: 'Markdown',
+            ...groupButtons
+          }).catch(()=>{});
         }
       }
     } catch (err) {}
@@ -273,10 +296,7 @@ http.createServer((req, res) => {
   res.end('Jannat OTP Bot Online\n');
 }).listen(PORT);
 
-bot.launch().then(async () => {
-  console.log('🤖 Bot terminal par live hai!');
-  await setCommands();
-});
+bot.launch().then(() => console.log('Bot is live!'));
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
