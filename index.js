@@ -2,10 +2,10 @@ const { Telegraf, Markup } = require('telegraf');
 const axios = require('axios');
 const http = require('http');
 
-// CONFIGURATIONS
+// NEW BOT TOKEN
 const TELEGRAM_BOT_TOKEN = '8663930234:AAFCDXDuLLofDASj7ZCygDmPNZ-EUFgM0FE';
 
-// JANNAT OTP PLATFORM API
+// API CONFIG
 const API_BASE_URL = 'https://jannat-otp-1.vercel.app/get-number.php';
 const API_KEY = 'ZNX_03CZSLDHHSW41IZWV61X8850';
 
@@ -77,7 +77,7 @@ bot.hears('☎️ Support', (ctx) => {
   ctx.reply(`🚨 *Support:* ${SUPPORT_USERNAME}`);
 });
 
-// GET NUMBER & INSTANT DISPLAY
+// GET NUMBER WITH CANCEL & COPY BUTTONS
 bot.action(/^srv_/, async (ctx) => {
   const serviceCode = ctx.match.input.split('_')[1];
   ctx.answerCbQuery('Fetching number...');
@@ -92,11 +92,9 @@ bot.action(/^srv_/, async (ctx) => {
       const orderId = data.order_id || Date.now();
       const countryName = data.country || 'Sierra Leone';
 
-      // Keyboard with Click-to-Copy Number & Cancel Button
       const orderKeyboard = Markup.inlineKeyboard([
-        [Markup.button.callback(`📋 Tap to Copy: +${number}`, `copy_${number}`)],
-        [Markup.button.url('🔑 OTP Group', MAIN_CHANNEL_LINK)],
-        [Markup.button.callback('❌ Cancel Order', `cancel_${orderId}`)]
+        [Markup.button.callback('🔄 Check OTP', `check_${orderId}`), Markup.button.callback('❌ Cancel Order', `cancel_${orderId}`)],
+        [Markup.button.url('🔑 OTP Group', MAIN_CHANNEL_LINK)]
       ]);
 
       ctx.replyWithMarkdown(
@@ -104,11 +102,10 @@ bot.action(/^srv_/, async (ctx) => {
         `📌 *Service:* ${serviceCode.toUpperCase()}\n` +
         `📱 *Number:* \`+${number}\` (Tap to copy)\n` +
         `🆔 *Order ID:* \`${orderId}\`\n\n` +
-        `🔑 *Status:* Waiting for OTP...`,
+        `🔑 *Status:* Waiting for OTP (Auto Syncing 5s)...`,
         orderKeyboard
       );
 
-      // Start OTP Polling
       pollForOtp(ctx, orderId, number, serviceCode, countryName);
     } else {
       ctx.reply('❌ No numbers available. Please try again.');
@@ -118,11 +115,10 @@ bot.action(/^srv_/, async (ctx) => {
   }
 });
 
-// CANCEL ORDER ACTION
+// CANCEL ACTION
 bot.action(/^cancel_/, async (ctx) => {
   const orderId = ctx.match.input.split('_')[1];
-  ctx.answerCbQuery();
-
+  ctx.answerCbQuery('Cancelling order...');
   try {
     await axios.get(`${API_BASE_URL}?api_key=${API_KEY}&action=cancel_number&order_id=${orderId}`);
     ctx.editMessageText(`❌ *Order #${orderId} Cancelled Successfully.*`, { parse_mode: 'Markdown' });
@@ -131,7 +127,12 @@ bot.action(/^cancel_/, async (ctx) => {
   }
 });
 
-// OTP POLLING & ACTIVE RANGE GROUP FORWARDING
+// CHECK OTP ACTION
+bot.action(/^check_/, (ctx) => {
+  ctx.answerCbQuery('Checking for SMS...');
+});
+
+// OTP POLLING & GROUP FORWARDING
 function pollForOtp(ctx, orderId, number, service, country) {
   let attempts = 0;
   const maxAttempts = 120;
@@ -147,7 +148,6 @@ function pollForOtp(ctx, orderId, number, service, country) {
         const otpCode = data.sms_code || data.code;
         const fullMsg = data.sms_text || `${otpCode} is your ${service.toUpperCase()} code`;
 
-        // Send OTP to User (Click-to-Copy OTP Code)
         ctx.replyWithMarkdown(
           `🎉 *OTP RECEIVED!*\n\n` +
           `📱 *Number:* \`+${number}\`\n` +
@@ -155,12 +155,10 @@ function pollForOtp(ctx, orderId, number, service, country) {
           `📩 *Full Message:* \`${fullMsg}\``
         );
 
-        // Date-Time formatting
         const now = new Date();
         const timeStr = now.toISOString().replace('T', ' ').substring(0, 19);
-
-        // Format exact as requested in Active Range Image
         const rangeText = `${number.substring(0, 6)}XXX`;
+
         const groupMsg = 
           `*ACTIVE RANGE*\n` +
           `——— 📸✨ *${service.toUpperCase()} RANGE* ✨———\n\n` +
@@ -195,7 +193,6 @@ function pollForOtp(ctx, orderId, number, service, country) {
 }
 
 bot.action('close', (ctx) => ctx.deleteMessage().catch(() => {}));
-bot.action(/^copy_/, (ctx) => ctx.answerCbQuery('Number copied to clipboard!'));
 
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
